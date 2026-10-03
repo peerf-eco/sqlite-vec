@@ -71,7 +71,13 @@ def loadable_path():
 def load(conn: sqlite3.Connection)  -> None:
   """ Load the {package_name} SQLite extension into the given database connection. """
 
-  conn.load_extension(loadable_path())
+  # sqlite3_load_extension() refuses to run until the connection opts in, so
+  # enable it for the duration of the load and restore the secure default after.
+  conn.enable_load_extension(True)
+  try:
+    conn.load_extension(loadable_path())
+  finally:
+    conn.enable_load_extension(False)
 '''
 
 
