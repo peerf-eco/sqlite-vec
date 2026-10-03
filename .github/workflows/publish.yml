@@ -234,6 +234,11 @@ jobs:
         with:
           packages-dir: dist/
           repository-url: ${{ inputs.pypi_repository_url }}
+          # An unset secret leaves this empty, which selects trusted publishing
+          # (OIDC). Set PYPI_API_TOKEN to fall back to a scoped API token, which
+          # is also what creates the project on the very first upload.
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          user: __token__
           skip-existing: true
           print-hash: true
 
