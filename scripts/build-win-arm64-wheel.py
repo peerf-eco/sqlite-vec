@@ -148,21 +148,25 @@ def build_wheel(dll: Path, outdir: Path, dist_name: str, description: str) -> Pa
 
     assert_arm64_pe(dll)
 
-    readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    metadata = (
-        "Metadata-Version: 2.1\n"
-        f"Name: {dist_name}\n"
-        f"Version: {version}\n"
-        f"Summary: {SUMMARY}\n"
-        "License: MIT License, Apache License, Version 2.0\n"
-        "Requires-Python: >=3.8\n"
-        "Description-Content-Type: text/markdown\n"
-        "Project-URL: Source, https://github.com/peerf-eco/sqlite-vec\n"
-        "Project-URL: Upstream, https://github.com/asg017/sqlite-vec\n"
-        "\n"
-        f"{description}\n"
-        f"\nUpstream project README follows.\n\n{readme}"
-    ).encode("utf-8")
+    # Deliberately no long description: the upstream README is ~10 kB of docs
+    # that would otherwise be duplicated into METADATA (and rendered on the PyPI
+    # project page) for every release. Pass --description for a short blurb.
+    headers = [
+        "Metadata-Version: 2.4",
+        f"Name: {dist_name}",
+        f"Version: {version}",
+        f"Summary: {SUMMARY}",
+        "License-Expression: MIT OR Apache-2.0",
+        "Requires-Python: >=3.8",
+        "Project-URL: Homepage, https://github.com/peerf-eco/sqlite-vec",
+        "Project-URL: Upstream, https://github.com/asg017/sqlite-vec",
+    ]
+    body = description.strip()
+    if body:
+        headers.append("Description-Content-Type: text/plain")
+        metadata = ("\n".join(headers) + "\n\n" + body + "\n").encode("utf-8")
+    else:
+        metadata = ("\n".join(headers) + "\n").encode("utf-8")
 
     wheel_metadata = (
         "Wheel-Version: 1.0\n"
@@ -193,7 +197,9 @@ def build_wheel(dll: Path, outdir: Path, dist_name: str, description: str) -> Pa
             info = zipfile.ZipInfo(arcname, date_time=(1980, 1, 1, 0, 0, 0))
             info.external_attr = 0o644 << 16
             info.compress_type = zipfile.ZIP_DEFLATED
-            archive.writestr(info, payload)
+            # compresslevel must be passed to writestr: a caller-supplied ZipInfo
+            # keeps _compresslevel=None, so the ZipFile-level default is ignored.
+            archive.writestr(info, payload, compresslevel=9)
 
     return wheel_path
 
