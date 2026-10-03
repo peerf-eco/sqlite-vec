@@ -1,14 +1,6 @@
 name: Deploy Site
 on:
   workflow_dispatch: {}
-  push:
-    branches:
-      - main
-    paths:
-      - "site/**"
-      - ".github/**"
-      - "VERSION"
-      - "reference.yaml"
 jobs:
   deploy:
     runs-on: ubuntu-latest

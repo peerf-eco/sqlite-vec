@@ -1,10 +1,5 @@
 name: "Fuzz"
 on:
-  push:
-    branches: [main]
-  schedule:
-    # Nightly at 2am UTC for longer fuzzing sessions
-    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       duration:
