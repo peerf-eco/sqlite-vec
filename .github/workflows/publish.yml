@@ -100,7 +100,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          cl.exe /nologo /W4 /O2 /LD /Ivendor/ sqlite-vec.c /Fe:dist/vec0.dll
+          cl.exe -nologo -W4 -O2 -LD -Ivendor/ sqlite-vec.c -Fe:dist/vec0.dll
           ls -l dist
 
       - name: Build wheel
