@@ -14,9 +14,9 @@ on:
         default: "sqlite-vec-win-arm64"
         type: string
       cache_ttl_minutes:
-        description: "Minutes to retain Actions caches after last access"
+        description: "Minutes to retain Actions caches after last access (0 = delete at end of run)"
         required: false
-        default: "60"
+        default: "0"
         type: string
 
 concurrency:
