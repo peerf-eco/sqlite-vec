@@ -161,7 +161,6 @@ jobs:
           name: sqlite-vec-win-arm64-wheel
           path: dist/*.whl
           if-no-files-found: error
-          retention-days: 7
 
   github-release:
     name: Attach wheel to GitHub Release
