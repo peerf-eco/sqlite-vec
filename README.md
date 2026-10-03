@@ -94,6 +94,123 @@ limit 2;
 */
 ```
 
+## GitHub Actions workflows (this fork)
+
+> [!NOTE]
+> Every workflow in `.github/workflows/` is **manual-trigger only**
+> (`workflow_dispatch`). Nothing runs automatically on push, on a tag, or when a
+> release is published — start a run from the
+> [Actions tab](https://github.com/peerf-eco/sqlite-vec/actions).
+
+This fork exists to publish
+[`sqlite-vec-win-arm64`](https://pypi.org/project/sqlite-vec-win-arm64/), a
+`win_arm64` wheel that upstream `sqlite-vec` does not ship. Upstream publishes
+only `win_amd64` and no sdist, so `pip install sqlite-vec` fails outright on
+Windows on ARM. Install ours with `pip install sqlite-vec-win-arm64`, then
+`import sqlite_vec` as usual.
+
+| Workflow | Use it when | Expected result |
+| --- | --- | --- |
+| [`sqlite-vec-win-arm64`](#sqlite-vec-win-arm64) | You changed C code or the build and want proof it still compiles and works on Windows ARM64 | One green run, artifact `sqlite-vec-win-arm64-wheel`. Nothing is published. |
+| [`publish`](#publish) | You are cutting a release | Builds the wheel, then attaches it to a GitHub Release and/or uploads it to PyPI |
+| [`Test`](#test) | You want upstream's full cross-platform build + test matrix before a release | 12 jobs; extensions for Linux, macOS, Windows, Android, iOS, WASM, plus `make test-loadable` |
+| [`Release`](#release) | Only to run upstream's full multi-ecosystem release | **Fails as configured** — see below |
+| [`Deploy Site`](#deploy-site) | You changed `site/`, `VERSION` or `reference.yaml` | **Fails as configured** until GitHub Pages is enabled |
+| [`Fuzz`](#fuzz) | You want to fuzz the C code | `fuzz-linux` is the only job whose result is meaningful |
+
+### sqlite-vec-win-arm64
+
+Native build of the Windows ARM64 wheel, no publishing.
+
+- **Runner:** GitHub-hosted `windows-11-arm` (free on this public repo), MSVC
+  ARM64 toolchain, native ARM64 CPython.
+- **Inputs:** `ref` (branch/tag/SHA, default the dispatch ref), `dist_name`,
+  `cache_ttl_minutes`.
+- **Pipeline:** fetch SQLite amalgamation → generate `sqlite-vec.h` → compile
+  `vec0.dll` → package a `py3-none-win_arm64` wheel → `twine check` → functional
+  smoke test (float32 KNN + int8 hamming) → upload artifact → purge stale caches.
+- **SIMD:** built without `SQLITE_VEC_ENABLE_NEON`, because MSVC ARM64 ships
+  `arm64_neon.h` rather than the `arm_neon.h` the NEON kernels include. MSVC
+  auto-vectorizes the portable kernels at `/O2`.
+- **Safety net:** `scripts/build-win-arm64-wheel.py` parses the PE header and
+  refuses to package anything that is not an ARM64 image, so an accidental x64
+  build can never be published.
+
+### publish
+
+The release path. Builds once, then fans out.
+
+- **Inputs:** `ref`, `tag` (defaults to `v$(cat VERSION)`), `dist_name`,
+  `create_release`, `publish_pypi`, `pypi_repository_url` (leave empty for real
+  PyPI; set it for TestPyPI), `cache_ttl_minutes`.
+- **`create_release: true`** creates the GitHub Release if the tag has none, or
+  replaces the asset on an existing one. Releases are marked pre-release when
+  `VERSION` contains `alpha`, `beta` or `rc`.
+- **`publish_pypi: true`** uploads via **trusted publishing (OIDC)** — the
+  repository holds no PyPI credentials at all. The publisher must already be
+  registered on PyPI for `peerf-eco/sqlite-vec` / `publish.yml` with an **empty
+  environment field**.
+- **`skip-existing` is on**, so re-running a version that is already on PyPI is a
+  no-op rather than a failure. This matters: PyPI filenames are immutable per
+  `(project, version)`, so a rebuild of an existing version can never be
+  uploaded. To ship changed bytes, bump `VERSION` first.
+- Builds are not bit-reproducible across commits — `sqlite-vec.c:10626` embeds a
+  `Date:`/`Commit:` provenance string, and MSVC stamps a `TimeDateStamp` into the
+  PE header. Same commit differs by 4 bytes; different commits differ in the
+  embedded SHA too.
+
+### Test
+
+Upstream's cross-platform matrix, unchanged apart from the trigger.
+
+- **Was:** `push` to `main`. **Now:** manual.
+- **Result:** 12 jobs. Linux x64/arm64, macOS x64/arm64, Windows x64,
+  Android (4 ABIs), iOS (3 slices), WASM, Pyodide and a cosmopolitan CLI build;
+  `make test-loadable` runs where a host executable exists. Extensions are
+  uploaded as artifacts.
+- This is the broad safety net, but it does **not** cover Windows ARM64 — use
+  `sqlite-vec-win-arm64` for that.
+
+### Release
+
+Upstream's full release: amalgamation, sqlite-dist, npm, RubyGems, PyPI and
+crates.io.
+
+- **Was:** `release: published`. **Now:** manual.
+- **Will fail here.** It needs `PYPI_API_TOKEN`, `GEM_HOST_API_KEY`,
+  `CARGO_REGISTRY_TOKEN` and `NCRUCES_BINDINGS_REPO_PAT`, none of which exist in
+  this repository, and it targets upstream's own registries. Use
+  [`publish`](#publish) for this fork's releases.
+
+### Deploy Site
+
+Builds the VitePress documentation and publishes it to GitHub Pages.
+
+- **Was:** `push` to `main` filtered on `site/**`, `.github/**`, `VERSION`,
+  `reference.yaml`. **Now:** manual.
+- **Will fail here** until Pages is switched on: repository **Settings → Pages →
+  Source → GitHub Actions**. It also targets the `github-pages` environment,
+  which does not exist yet and will be created on first run.
+
+### Fuzz
+
+libFuzzer targets for the C code.
+
+- **Was:** `push` to `main` plus a nightly `0 2 * * *` cron. **Now:** manual.
+- **Input:** `duration`, seconds per target (default `60`).
+- Only `fuzz-linux` is reliable. `fuzz-macos` and `fuzz-windows` are marked
+  `continue-on-error` upstream because Homebrew libFuzzer pulls in typed-allocation
+  ABI symbols macOS 14's `libc++` lacks, and ASan support on Windows is shaky.
+  Crashes are uploaded as artifacts.
+
+### Caching
+
+Only the SQLite amalgamation is cached (~2.7 MB), keyed on `scripts/vendor.sh`.
+Because GitHub gives no control over cache expiry — entries linger 7 days after
+last access — `scripts/purge-actions-cache.py` deletes any cache entry not
+accessed within `cache_ttl_minutes` (default 60) at the end of each successful
+run. Expiry is therefore enforced at purge time, not autonomously by GitHub.
+
 ## Sponsors
 
 Development of `sqlite-vec` is supported by multiple generous sponsors! Mozilla
